@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <stdbool.h>
+#include <ctype.h>
 
 int lsof(char* pid) {
 	printf("PID: %s\n", pid);
@@ -12,11 +15,10 @@ int lsof(char* pid) {
 	char* tmp_path = strcat(proc_path, pid);
 	char* path = strcat(tmp_path, fd_path);
 	size_t path_len = strlen(path);
-	printf("path_len %d\n", path_len);
 	DIR* dir = opendir(path);
 
 	if (dir == NULL) {
-		printf("ERROR: Cannot open %s.", path);
+		printf("ERROR: Cannot open %s\n", path);
 		return -1;
 	}
 
@@ -76,17 +78,36 @@ int main(int argc, char** argv) {
 
 		struct dirent* dir_entr;
 		while((dir_entr = readdir(dir))) {
+			struct stat status;
+			lstat(dir_entr->d_name, &status);
+
+			if (!S_ISDIR(status.st_mode)) {
+				continue;
+			}
+
 			char* d_name = dir_entr->d_name;
 
 			if ((!strcmp(d_name, ".")) || (!strcmp(d_name, ".."))) {
 				continue;
 			}
 
-			if (strspn(d_name, "0123456789") == strlen(d_name)) {
-				continue;
-			}
+			bool is_pid = true;
 
-			lsof(d_name);
+			for (int i = 0; i < strlen(d_name); i++) {
+				if (!isdigit(d_name[i])) {
+					is_pid = false;
+					break;
+				}
+			}
+			
+			if (!is_pid) continue;
+
+			printf("name: %s\n.", dir_entr->d_name);
+
+			if (lsof(d_name) == -1) {
+				printf("ERROR: Cannot complete lsof.\n");
+				return -1;
+			}
 		}
 
 		closedir(dir);
